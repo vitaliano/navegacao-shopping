@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Navegação do Shopping</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body data-mode="navigate">
+  <header class="topbar">
+    <div class="brand">🧭 Navegação do Shopping</div>
+    <div class="toolbar">
+      <div class="tool-group">
+        <button id="btn-fit" title="Enquadrar o mapa">⤢ Ver mapa inteiro</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <div class="canvas-wrap">
+      <canvas id="map-canvas"></canvas>
+      <div id="empty-hint" class="empty-hint">
+        <p>Carregando o mapa…</p>
+      </div>
+      <div id="status" class="status"></div>
+    </div>
+
+    <aside class="sidebar">
+      <!-- NAVEGAÇÃO -->
+      <section class="panel">
+        <h2>🧭 Para onde vamos?</h2>
+        <label class="field">
+          <span>Estou em</span>
+          <select id="route-from"></select>
+        </label>
+        <label class="field">
+          <span>Quero ir para</span>
+          <select id="route-to"></select>
+        </label>
+        <div class="row">
+          <button id="btn-route" class="primary">Traçar rota</button>
+          <button id="btn-clear-route">Limpar</button>
+        </div>
+        <div id="route-info" class="route-info muted">Escolha origem e destino.</div>
+      </section>
+
+      <!-- AJUDA -->
+      <section class="panel">
+        <h2>ℹ️ Como usar</h2>
+        <ul class="help">
+          <li>Escolha <strong>Estou em</strong> e <strong>Quero ir para</strong> nas listas acima.</li>
+          <li>Ou toque direto nos pontos do mapa: primeiro a <strong>origem</strong>, depois o <strong>destino</strong>.</li>
+          <li>Arraste o mapa para navegar e use a roda do mouse (ou pinça) para dar zoom.</li>
+        </ul>
+        <div class="legend">
+          <span><i class="dot store"></i> Loja</span>
+          <span><i class="dot plaza"></i> Praça</span>
+          <span><i class="dot entrance"></i> Entrada</span>
+        </div>
+      </section>
+    </aside>
+  </main>
+
+  <script src="pathfinding.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

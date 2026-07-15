@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Editor · Navegação do Shopping</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body data-mode="editor">
+  <header class="topbar">
+    <div class="brand">🛠️ Editor do Mapa</div>
+
+    <div class="toolbar">
+      <div class="tool-group" role="group" aria-label="Ferramentas">
+        <button class="tool" data-mode="select" title="Selecionar / mover pontos (V)">✋ Selecionar</button>
+        <button class="tool" data-mode="addNode" title="Adicionar ponto (A)">➕ Ponto</button>
+        <button class="tool" data-mode="addStore" title="Cadastrar loja: clique no local (L)">🏬 Loja</button>
+        <button class="tool" data-mode="connect" title="Ligar corredor entre dois pontos (C)">🔗 Corredor</button>
+        <button class="tool" data-mode="erase" title="Apagar pontos: clique ou arraste uma caixa (E)">🧽 Apagar</button>
+        <button class="tool" data-mode="navigate" title="Traçar rota (N)">🧭 Navegar</button>
+      </div>
+
+      <div class="tool-group type-picker" title="Tipo do próximo ponto">
+        <label for="node-type">Tipo:</label>
+        <select id="node-type">
+          <option value="corner">Esquina / cruzamento</option>
+          <option value="store">Loja / ponto</option>
+          <option value="plaza">Praça</option>
+          <option value="entrance">Entrada</option>
+        </select>
+      </div>
+
+      <div class="tool-group">
+        <button id="btn-load-image" title="Trocar a planta do shopping">🖼️ Planta</button>
+        <button id="btn-fit" title="Enquadrar (F)">⤢ Enquadrar</button>
+      </div>
+
+      <div class="tool-group">
+        <button id="btn-export" class="primary" title="Baixar o mapa (JSON) para publicar">⬇️ Publicar (JSON)</button>
+        <button id="btn-import" title="Abrir um mapa (JSON)">⬆️ Importar</button>
+        <a class="linkbtn" href="index.html" title="Abrir a página do usuário">👁️ Ver como usuário</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <div class="canvas-wrap">
+      <canvas id="map-canvas"></canvas>
+      <div id="empty-hint" class="empty-hint">
+        <p>Carregando a planta…</p>
+        <button id="btn-load-image-2">🖼️ Carregar planta</button>
+        <p class="muted">Depois use <strong>➕ Ponto</strong> para marcar lugares e <strong>🔗 Corredor</strong> para ligá-los.</p>
+      </div>
+      <div id="status" class="status"></div>
+    </div>
+
+    <aside class="sidebar">
+      <!-- CONFIGURAÇÃO INICIAL (detecção automática) -->
+      <section class="panel">
+        <h2>🪄 Configuração inicial</h2>
+        <p class="muted small" style="margin-top:0">
+          Detecta automaticamente as <strong>faixas cinza</strong> da planta como
+          corredores e seus cruzamentos como esquinas. Depois é só revisar,
+          renomear os lugares e completar.
+        </p>
+        <div class="row">
+          <button id="btn-autodetect" class="primary">🪄 Detectar corredores</button>
+        </div>
+        <details class="advanced">
+          <summary>Ajustes finos</summary>
+          <label class="field">
+            <span>Tolerância de cinza <b id="v-sattol"></b></span>
+            <input type="range" id="det-sattol" min="5" max="80" step="1" value="30" />
+          </label>
+          <label class="field">
+            <span>Brilho mínimo <b id="v-graymin"></b></span>
+            <input type="range" id="det-graymin" min="0" max="255" step="1" value="110" />
+          </label>
+          <label class="field">
+            <span>Brilho máximo <b id="v-graymax"></b></span>
+            <input type="range" id="det-graymax" min="0" max="255" step="1" value="210" />
+          </label>
+          <label class="field">
+            <span>Simplificação <b id="v-eps"></b></span>
+            <input type="range" id="det-eps" min="1" max="20" step="1" value="6" />
+          </label>
+          <label class="field">
+            <span>Remover farpas <b id="v-prune"></b></span>
+            <input type="range" id="det-prune" min="0" max="40" step="1" value="14" />
+          </label>
+          <p class="muted small">Mexa e clique em <strong>Detectar</strong> de novo. Isso substitui os pontos atuais.</p>
+        </details>
+      </section>
+
+      <!-- PUBLICAÇÃO -->
+      <section class="panel">
+        <h2>💾 Publicar</h2>
+        <p class="muted small" style="margin-top:0">
+          O mapa mora no arquivo <strong>data/mapa.json</strong>. Ao terminar,
+          clique em <strong>⬇️ Publicar</strong>, e substitua o arquivo
+          <code>data/mapa.json</code> do app pelo baixado. Os usuários passam
+          a ver o novo mapa na página <strong>index.html</strong>.
+        </p>
+      </section>
+
+      <!-- LOJAS -->
+      <section class="panel">
+        <h2>🏬 Lojas</h2>
+        <input type="text" id="store-search" placeholder="🔎 Buscar loja…" />
+        <p class="muted small" id="store-count" style="margin:8px 0 6px"></p>
+        <div id="store-list"></div>
+        <p class="muted small">Use <strong>🏬 Loja</strong> (tecla L) e clique no local: a loja conecta sozinha à via mais próxima. Depois digite o nome no painel do ponto.</p>
+      </section>
+
+      <!-- PROPRIEDADES DO PONTO SELECIONADO -->
+      <section class="panel" id="props-panel" hidden>
+        <h2>📍 Ponto selecionado</h2>
+        <label class="field">
+          <span>Nome</span>
+          <input type="text" id="node-name" placeholder="Ex.: Praça de Alimentação" />
+        </label>
+        <label class="field">
+          <span>Tipo</span>
+          <select id="node-type-edit">
+            <option value="corner">Esquina / cruzamento</option>
+            <option value="store">Loja / ponto</option>
+            <option value="plaza">Praça</option>
+            <option value="entrance">Entrada</option>
+          </select>
+        </label>
+        <div class="row">
+          <button id="btn-delete-node" class="danger">🗑️ Excluir ponto</button>
+        </div>
+        <p class="muted small">Só pontos <strong>com nome</strong> aparecem na lista do usuário. Dica: arraste para reposicionar; <kbd>Del</kbd> exclui.</p>
+      </section>
+
+      <!-- ROTA (teste) -->
+      <section class="panel">
+        <h2>🧭 Testar rota</h2>
+        <label class="field">
+          <span>De</span>
+          <select id="route-from"></select>
+        </label>
+        <label class="field">
+          <span>Para</span>
+          <select id="route-to"></select>
+        </label>
+        <div class="row">
+          <button id="btn-route" class="primary">Traçar rota</button>
+          <button id="btn-clear-route">Limpar</button>
+        </div>
+        <div id="route-info" class="route-info muted">Escolha origem e destino.</div>
+      </section>
+
+      <!-- LEGENDA / AJUDA -->
+      <section class="panel">
+        <h2>ℹ️ Como usar</h2>
+        <ul class="help">
+          <li><strong>➕ Ponto</strong>: clique na planta para marcar um lugar.</li>
+          <li><strong>🏬 Loja</strong>: clique no local da loja — ela conecta sozinha à via mais próxima. Depois dê o nome (só lojas com nome aparecem pro usuário).</li>
+          <li><strong>🔗 Corredor</strong>: clique em dois pontos para ligá-los. Clicando num <strong>lugar vazio</strong>, cria um ponto ali e já liga — assim você desenha corredores novos e estende para áreas não detectadas. <kbd>Esc</kbd> encerra o traçado.</li>
+          <li><strong>✋ Selecionar</strong>: arraste pontos ou o fundo (pan). Roda do mouse dá zoom.</li>
+          <li><strong>🧽 Apagar</strong>: clique num ponto para excluir, ou arraste uma <strong>caixa</strong> para apagar vários de uma vez. <strong>Botão direito</strong> exclui um ponto em qualquer modo; <kbd>Del</kbd> exclui o selecionado.</li>
+          <li><strong>🧭 Navegar</strong>: clique num ponto de origem e depois no destino.</li>
+        </ul>
+        <div class="legend">
+          <span><i class="dot corner"></i> Esquina</span>
+          <span><i class="dot store"></i> Loja</span>
+          <span><i class="dot plaza"></i> Praça</span>
+          <span><i class="dot entrance"></i> Entrada</span>
+        </div>
+        <p class="muted small" id="counts"></p>
+      </section>
+    </aside>
+  </main>
+
+  <!-- inputs escondidos -->
+  <input type="file" id="file-image" accept="image/*" hidden />
+  <input type="file" id="file-import" accept="application/json,.json" hidden />
+
+  <script src="pathfinding.js"></script>
+  <script src="autodetect.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
