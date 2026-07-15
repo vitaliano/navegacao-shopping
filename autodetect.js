@@ -35,8 +35,7 @@ const DETECT_DEFAULTS = {
 
 function detectCorridors(image, options) {
   const o = Object.assign({}, DETECT_DEFAULTS, options || {});
-
-  // ---- 1. desenha reduzido e lê os pixels ----
+  // desenha reduzido e lê os pixels
   const scale = Math.min(1, o.maxDim / Math.max(image.width, image.height));
   const w = Math.max(1, Math.round(image.width * scale));
   const h = Math.max(1, Math.round(image.height * scale));
@@ -45,8 +44,16 @@ function detectCorridors(image, options) {
   const c = cv.getContext("2d", { willReadFrequently: true });
   c.drawImage(image, 0, 0, w, h);
   const data = c.getImageData(0, 0, w, h).data;
+  return detectFromPixels(data, w, h, image.width, image.height, o);
+}
 
-  // ---- 2. máscara de cinza ----
+// Núcleo sem DOM: recebe os pixels (RGBA) já reduzidos para w×h e as
+// dimensões da imagem original; devolve { nodes, edges }. Serve ao navegador
+// e à geração do mapa-base fora do navegador (Node).
+function detectFromPixels(data, w, h, origW, origH, options) {
+  const o = Object.assign({}, DETECT_DEFAULTS, options || {});
+
+  // máscara de cinza
   let mask = new Uint8Array(w * h);
   for (let i = 0, p = 0; i < mask.length; i++, p += 4) {
     const r = data[p], g = data[p + 1], b = data[p + 2], a = data[p + 3];
@@ -56,28 +63,26 @@ function detectCorridors(image, options) {
     if (mx - mn <= o.satTol && bright >= o.grayMin && bright <= o.grayMax) mask[i] = 1;
   }
 
-  // ---- 3. limpeza + só regiões grandes ----
+  // limpeza + só regiões grandes
   for (let k = 0; k < o.openIter; k++) mask = morphOpen(mask, w, h);
   mask = keepLargeComponents(mask, w, h, Math.round(o.minAreaFrac * w * h));
 
-  // ---- 4. esqueleto ----
+  // esqueleto + grafo
   const skel = zhangSuen(mask, w, h);
-
-  // ---- 5. grafo ----
   const graph = skeletonToGraph(skel, w, h, o);
 
-  // ---- volta para px da imagem original ----
-  const inv = 1 / scale;
+  // volta para px da imagem original
+  const invX = origW / w, invY = origH / h;
   const nodes = graph.nodes.map((pt, i) => ({
     id: i + 1,
-    x: Math.round(pt.x * inv),
-    y: Math.round(pt.y * inv),
+    x: Math.round(pt.x * invX),
+    y: Math.round(pt.y * invY),
     name: "",
     type: "corner",
   }));
   const edges = graph.edges.map((e) => ({ a: e.a + 1, b: e.b + 1 }));
 
-  return { nodes, edges, analyzed: { w, h, scale } };
+  return { nodes, edges, analyzed: { w, h } };
 }
 
 // ============================================================
@@ -386,4 +391,8 @@ function perpDist(p, a, b) {
   const t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2;
   const cx = a.x + t * dx, cy = a.y + t * dy;
   return Math.hypot(p.x - cx, p.y - cy);
+}
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = { detectCorridors, detectFromPixels, DETECT_DEFAULTS };
 }

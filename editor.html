@@ -178,8 +178,35 @@
   <input type="file" id="file-image" accept="image/*" hidden />
   <input type="file" id="file-import" accept="application/json,.json" hidden />
 
-  <script src="pathfinding.js"></script>
-  <script src="autodetect.js"></script>
-  <script src="app.js"></script>
+  <!-- Gate de senha do configurador. É uma barreira simples (client-side):
+       mantém curiosos fora, mas não é segurança forte. Para trocar a senha,
+       altere a constante SENHA abaixo e publique. -->
+  <script>
+  (function () {
+    const SENHA = "mapa2026";     // ← TROQUE AQUI a senha do configurador
+    const KEY = "cfg-auth";
+    function carregarApp() {
+      const arquivos = ["pathfinding.js", "autodetect.js", "app.js"];
+      (function next(i) {
+        if (i >= arquivos.length) return;
+        const s = document.createElement("script");
+        s.src = arquivos[i];
+        s.onload = () => next(i + 1);
+        s.onerror = () => next(i + 1);
+        document.body.appendChild(s);
+      })(0);
+    }
+    if (sessionStorage.getItem(KEY) === "1") { carregarApp(); return; }
+    const tentativa = prompt("🔒 Senha do configurador:");
+    if (tentativa !== null && tentativa === SENHA) {
+      sessionStorage.setItem(KEY, "1");
+      carregarApp();
+    } else {
+      document.body.innerHTML =
+        '<div style="padding:40px;font-family:system-ui;color:#e8edf5;background:#0f1420;min-height:100vh">' +
+        '🔒 Acesso restrito ao configurador. Recarregue a página para tentar novamente.</div>';
+    }
+  })();
+  </script>
 </body>
 </html>
