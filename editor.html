@@ -15,6 +15,7 @@
         <button class="tool" data-mode="select" title="Selecionar / mover pontos (V)">✋ Selecionar</button>
         <button class="tool" data-mode="addNode" title="Adicionar ponto (A)">➕ Ponto</button>
         <button class="tool" data-mode="addStore" title="Cadastrar loja: clique no local (L)">🏬 Loja</button>
+        <button class="tool" data-mode="addQR" title="Ponto Você está aqui / QR: clique no local (Q)">📱 QR</button>
         <button class="tool" data-mode="connect" title="Ligar corredor entre dois pontos (C)">🔗 Corredor</button>
         <button class="tool" data-mode="erase" title="Apagar pontos: clique ou arraste uma caixa (E)">🧽 Apagar</button>
         <button class="tool" data-mode="navigate" title="Traçar rota (N)">🧭 Navegar</button>
@@ -27,6 +28,7 @@
           <option value="store">Loja / ponto</option>
           <option value="plaza">Praça</option>
           <option value="entrance">Entrada</option>
+          <option value="qr">Você está aqui (QR)</option>
         </select>
       </div>
 
@@ -134,6 +136,22 @@
         <p class="muted small">Só pontos <strong>com nome</strong> aparecem na lista do usuário. Dica: arraste para reposicionar; <kbd>Del</kbd> exclui.</p>
       </section>
 
+      <!-- QR "VOCÊ ESTÁ AQUI" -->
+      <section class="panel" id="props-qr" hidden>
+        <h2>📱 QR "Você está aqui"</h2>
+        <p class="muted small" style="margin-top:0">Cole este QR no local. Ao escanear, o app abre já com este ponto como <strong>origem</strong>.</p>
+        <div style="text-align:center;margin:8px 0">
+          <img id="qr-img" alt="QR Code" style="width:180px;height:180px;background:#fff;border-radius:8px" />
+        </div>
+        <div class="row">
+          <button id="qr-download">⬇️ QR (PNG)</button>
+          <button id="qr-poster" class="primary">⬇️ Cartaz</button>
+        </div>
+        <label class="field" style="margin-top:10px"><span>Link do QR</span><input type="text" id="qr-link" readonly /></label>
+        <label class="field"><span>Endereço público do site (base)</span><input type="text" id="qr-base" placeholder="https://…/index.html" /></label>
+        <p class="muted small">Dê um <strong>nome</strong> ao ponto (no painel acima) — ele aparece no cartaz e na tela do usuário.</p>
+      </section>
+
       <!-- ROTA (teste) -->
       <section class="panel">
         <h2>🧭 Testar rota</h2>
@@ -158,6 +176,7 @@
         <ul class="help">
           <li><strong>➕ Ponto</strong>: clique na planta para marcar um lugar.</li>
           <li><strong>🏬 Loja</strong>: clique no local da loja — ela conecta sozinha à via mais próxima. Depois dê o nome (só lojas com nome aparecem pro usuário).</li>
+          <li><strong>📱 QR</strong>: clique onde ficará o totem "Você está aqui". Selecione-o para <strong>baixar o QR/cartaz</strong>; ao escanear, a rota já começa desse ponto.</li>
           <li><strong>🔗 Corredor</strong>: clique em dois pontos para ligá-los. Clicando num <strong>lugar vazio</strong>, cria um ponto ali e já liga — assim você desenha corredores novos e estende para áreas não detectadas. <kbd>Esc</kbd> encerra o traçado.</li>
           <li><strong>✋ Selecionar</strong>: arraste pontos ou o fundo (pan). Roda do mouse dá zoom.</li>
           <li><strong>🧽 Apagar</strong>: clique num ponto para excluir, ou arraste uma <strong>caixa</strong> para apagar vários de uma vez. <strong>Botão direito</strong> exclui um ponto em qualquer modo; <kbd>Del</kbd> exclui o selecionado.</li>
@@ -168,6 +187,7 @@
           <span><i class="dot store"></i> Loja</span>
           <span><i class="dot plaza"></i> Praça</span>
           <span><i class="dot entrance"></i> Entrada</span>
+          <span><i class="dot" style="background:#c084fc"></i> Você está aqui (QR)</span>
         </div>
         <p class="muted small" id="counts"></p>
       </section>
@@ -186,7 +206,7 @@
     const SENHA = "mapa2026";     // ← TROQUE AQUI a senha do configurador
     const KEY = "cfg-auth";
     function carregarApp() {
-      const arquivos = ["pathfinding.js", "autodetect.js", "app.js"];
+      const arquivos = ["pathfinding.js", "autodetect.js", "qrcode.js", "app.js"];
       (function next(i) {
         if (i >= arquivos.length) return;
         const s = document.createElement("script");

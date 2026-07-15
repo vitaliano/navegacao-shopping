@@ -40,12 +40,14 @@ const TYPE_COLORS = {
   store: "#38bdf8",
   plaza: "#34d399",
   entrance: "#f59e0b",
+  qr: "#c084fc",
 };
 const TYPE_LABELS = {
   corner: "Esquina",
   store: "Loja",
   plaza: "Praça",
   entrance: "Entrada",
+  qr: "Você está aqui",
 };
 
 // ---------- Elementos (alguns só existem numa das páginas) ----------
@@ -70,7 +72,7 @@ function on(id, ev, fn) {
   if (el) el.addEventListener(ev, fn);
 }
 
-const CURSORS = { select: "grab", addNode: "crosshair", addStore: "crosshair", connect: "pointer", navigate: "pointer", erase: "crosshair" };
+const CURSORS = { select: "grab", addNode: "crosshair", addStore: "crosshair", addQR: "crosshair", connect: "pointer", navigate: "pointer", erase: "crosshair" };
 
 // ============================================================
 //  Transformações de coordenadas
@@ -293,6 +295,103 @@ function selectNode(id) {
   } else {
     propsPanel.hidden = true;
   }
+  const qrPanel = document.getElementById("props-qr");
+  if (qrPanel) {
+    if (node && node.type === "qr") { qrPanel.hidden = false; renderQRForNode(node); }
+    else qrPanel.hidden = true;
+  }
+  draw();
+}
+
+// ============================================================
+//  QR "Você está aqui"
+// ============================================================
+function defaultQRBase() {
+  let url = location.href.split("?")[0].split("#")[0];
+  if (/editor\.html$/.test(url)) return url.replace(/editor\.html$/, "index.html");
+  return url.replace(/[^/]*$/, "index.html"); // .../ → .../index.html
+}
+
+function renderQRForNode(node) {
+  if (typeof QR === "undefined") return;
+  const baseInput = document.getElementById("qr-base");
+  const linkInput = document.getElementById("qr-link");
+  const img = document.getElementById("qr-img");
+  if (!baseInput || !img) return;
+  if (!baseInput.value) baseInput.value = defaultQRBase();
+  const base = baseInput.value.trim();
+  const link = base + (base.includes("?") ? "&" : "?") + "aqui=" + node.id;
+  if (linkInput) linkInput.value = link;
+  try {
+    img.src = QR.toDataURL(link, { ecc: "M", scale: 6, margin: 4 });
+    img.dataset.link = link;
+  } catch (e) {
+    if (linkInput) linkInput.value = "⚠️ Link longo demais para o QR. Use um endereço mais curto.";
+  }
+}
+
+function qrFileName(node) {
+  const raw = (node.name || ("ponto-" + node.id)).toLowerCase().normalize("NFD");
+  let out = "";
+  for (const ch of raw) {
+    const c = ch.charCodeAt(0);
+    if (c >= 0x300 && c <= 0x36f) continue; // remove marcas de acento
+    out += ch;
+  }
+  out = out.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return out || ("ponto-" + node.id);
+}
+
+function downloadDataURL(dataURL, filename) {
+  const a = document.createElement("a");
+  a.href = dataURL; a.download = filename; a.click();
+}
+
+function drawQRModules(c, qr, x, y, scale, margin) {
+  const s = qr.size;
+  c.fillStyle = "#ffffff";
+  c.fillRect(x, y, (s + margin * 2) * scale, (s + margin * 2) * scale);
+  c.fillStyle = "#000000";
+  for (let yy = 0; yy < s; yy++) for (let xx = 0; xx < s; xx++) {
+    if (qr.modules[yy][xx]) c.fillRect(x + (xx + margin) * scale, y + (yy + margin) * scale, scale, scale);
+  }
+}
+
+function qrPosterDataURL(node, link) {
+  const qr = QR.generate(link, { ecc: "M" });
+  const scale = 10, margin = 2;
+  const qsize = (qr.size + margin * 2) * scale;
+  const pad = 60, titleH = 160, captionH = 90;
+  const W = Math.max(qsize + pad * 2, 720);
+  const H = titleH + qsize + captionH + pad;
+  const cv = document.createElement("canvas");
+  cv.width = W; cv.height = H;
+  const c = cv.getContext("2d");
+  c.fillStyle = "#ffffff"; c.fillRect(0, 0, W, H);
+  c.textAlign = "center";
+  c.fillStyle = "#0f1420"; c.font = "bold 56px system-ui, Segoe UI, sans-serif";
+  c.fillText("VOCÊ ESTÁ AQUI", W / 2, 78);
+  c.fillStyle = "#2563eb"; c.font = "600 34px system-ui, Segoe UI, sans-serif";
+  c.fillText(node.name || ("Ponto #" + node.id), W / 2, 126);
+  drawQRModules(c, qr, (W - qsize) / 2, titleH, scale, margin);
+  c.fillStyle = "#475569"; c.font = "28px system-ui, Segoe UI, sans-serif";
+  c.fillText("Aponte a câmera do celular para traçar sua rota", W / 2, titleH + qsize + 56);
+  return cv.toDataURL("image/png");
+}
+
+// Página do usuário: aplica ?aqui=<id> como origem ("Você está aqui")
+function applyYouAreHereFromURL() {
+  const aqui = new URLSearchParams(location.search).get("aqui");
+  if (!aqui) return;
+  const node = state.nodes.find((n) => String(n.id) === String(aqui));
+  if (!node) return;
+  if (routeFromSel) routeFromSel.value = String(node.id);
+  if (routeInfo) {
+    routeInfo.className = "route-info ok";
+    routeInfo.innerHTML = `📍 <b>Você está aqui:</b> ${escapeHtml(node.name) || ("Ponto #" + node.id)}.` +
+      `<br><span class="small">Agora escolha o destino para traçar a rota.</span>`;
+  }
+  centerOnNode(node.id);
   draw();
 }
 
@@ -414,6 +513,7 @@ function updateStatus() {
       ? `Adicionar ponto: clique na planta para criar um(a) "${TYPE_LABELS[nodeTypeSel.value]}".`
       : "",
     addStore: "Loja: clique no local dela. Ela se conecta sozinha à via mais próxima; depois digite o nome.",
+    addQR: "Você está aqui: clique onde ficará o totem/QR. Conecta sozinho à via; depois nomeie e baixe o QR.",
     connect: state.connectFrom == null
       ? "Corredor: clique num ponto (ou num lugar vazio para criar um). Esc encerra."
       : "Corredor: clique no próximo ponto; num lugar vazio cria e já liga. Esc encerra o traçado.",
@@ -449,6 +549,17 @@ canvas.addEventListener("mousedown", (evt) => {
     selectNode(store.id);
     if (nodeNameInput) nodeNameInput.focus();
     flashStatus("🏬 Loja criada e conectada à via. Digite o nome.");
+    return;
+  }
+
+  if (state.mode === "addQR") {
+    if (!state.image) { flashStatus("Carregue a planta primeiro."); return; }
+    const w = screenToWorld(m.x, m.y);
+    const qr = addNode(w.x, w.y, "qr");
+    connectStoreToNetwork(qr);
+    selectNode(qr.id);
+    if (nodeNameInput) nodeNameInput.focus();
+    flashStatus("📱 Ponto QR criado e conectado. Dê um nome e baixe o QR/cartaz no painel.");
     return;
   }
 
@@ -626,7 +737,7 @@ function refreshRouteSelectors() {
   if (!routeFromSel || !routeToSel) return;
   // Na navegação, mostramos só pontos com nome (lugares que interessam
   // ao usuário); esquinas de passagem ficam fora da lista.
-  const listable = state.nodes.filter((n) => isEditor || n.name);
+  const listable = state.nodes.filter((n) => isEditor || n.name || n.type === "qr");
   const opts = listable
     .map((n) => `<option value="${n.id}">${n.name || `Ponto #${n.id}`} · ${TYPE_LABELS[n.type]}</option>`)
     .join("");
@@ -829,6 +940,22 @@ on("store-search", "input", () => {
   refreshStoreList();
 });
 
+// QR "Você está aqui" (editor)
+on("qr-base", "input", () => {
+  const n = state.nodes.find((x) => x.id === state.selectedId);
+  if (n && n.type === "qr") renderQRForNode(n);
+});
+on("qr-download", "click", () => {
+  const n = state.nodes.find((x) => x.id === state.selectedId);
+  const img = document.getElementById("qr-img");
+  if (n && img && img.src) downloadDataURL(img.src, "qr-" + qrFileName(n) + ".png");
+});
+on("qr-poster", "click", () => {
+  const n = state.nodes.find((x) => x.id === state.selectedId);
+  const img = document.getElementById("qr-img");
+  if (n && img && img.dataset.link) downloadDataURL(qrPosterDataURL(n, img.dataset.link), "cartaz-" + qrFileName(n) + ".png");
+});
+
 // detecção automática (editor)
 on("btn-autodetect", "click", () => runAutoDetect(false));
 ["det-sattol", "det-graymin", "det-graymax", "det-eps", "det-prune"].forEach((id) => {
@@ -891,6 +1018,7 @@ if (isEditor) {
       case "v": setMode("select"); break;
       case "a": setMode("addNode"); break;
       case "l": setMode("addStore"); break;
+      case "q": setMode("addQR"); break;
       case "c": setMode("connect"); break;
       case "n": setMode("navigate"); break;
       case "e": setMode("erase"); break;
@@ -922,6 +1050,8 @@ async function boot() {
         if (isEditor && state.image && state.nodes.length === 0) {
           runAutoDetect(true);
         }
+        // Página do usuário: se veio de um QR (?aqui=<id>), já marca a origem.
+        if (!isEditor) applyYouAreHereFromURL();
       });
     } else {
       refreshAll();
