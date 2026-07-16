@@ -803,7 +803,85 @@ function exportJSON() {
   a.download = "mapa.json";
   a.click();
   URL.revokeObjectURL(url);
-  flashStatus("⬇️ Baixado mapa.json. Substitua data/mapa.json no app para publicar.");
+  flashStatus("⬇️ Backup baixado (mapa.json).");
+}
+
+// ============================================================
+//  Publicar ao vivo (grava data/mapa.json direto no GitHub)
+// ============================================================
+function getRepoConfig() {
+  let owner = "", repo = "";
+  if (location.host.endsWith("github.io")) {
+    owner = location.host.split(".")[0];
+    repo = location.pathname.split("/").filter(Boolean)[0] || "";
+  }
+  const g = (id, fb) => { const el = document.getElementById(id); return (el && el.value.trim()) || fb; };
+  return {
+    owner: g("gh-owner", owner),
+    repo: g("gh-repo", repo),
+    branch: g("gh-branch", "main"),
+    path: "data/mapa.json",
+  };
+}
+
+function prefillRepoConfig() {
+  const cfg = getRepoConfig();
+  const set = (id, v) => { const el = document.getElementById(id); if (el && !el.value) el.value = v; };
+  set("gh-owner", cfg.owner);
+  set("gh-repo", cfg.repo);
+  set("gh-branch", cfg.branch);
+}
+
+function base64OfUtf8(str) {
+  const bytes = new TextEncoder().encode(str);
+  let bin = "";
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin);
+}
+function ghHeaders(token) {
+  return { Authorization: "Bearer " + token, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" };
+}
+
+async function publishLive() {
+  const cfg = getRepoConfig();
+  if (!cfg.owner || !cfg.repo) {
+    flashStatus("⚠️ Configure owner/repositório em 'Configuração do repositório'.");
+    return;
+  }
+  let token = sessionStorage.getItem("gh-token");
+  if (!token) {
+    token = prompt("Cole um token do GitHub com permissão de escrita (Contents) neste repositório.\nEle fica só nesta sessão do navegador:");
+    if (!token) return;
+    token = token.trim();
+    sessionStorage.setItem("gh-token", token);
+  }
+
+  const apiBase = `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${cfg.path}`;
+  const content = JSON.stringify(serialize(), null, 2);
+  const body = {
+    message: "Atualiza mapa (publicado pelo editor)",
+    content: base64OfUtf8(content),
+    branch: cfg.branch,
+  };
+  try {
+    flashStatus("🚀 Publicando ao vivo…");
+    // pega o SHA atual do arquivo (necessário para atualizar)
+    const getRes = await fetch(`${apiBase}?ref=${encodeURIComponent(cfg.branch)}`, { headers: ghHeaders(token), cache: "no-store" });
+    if (getRes.status === 401) { sessionStorage.removeItem("gh-token"); flashStatus("⚠️ Token inválido/expirado. Clique em Publicar de novo e cole um token válido."); return; }
+    if (getRes.ok) body.sha = (await getRes.json()).sha;
+
+    const putRes = await fetch(apiBase, { method: "PUT", headers: { ...ghHeaders(token), "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (putRes.status === 401) { sessionStorage.removeItem("gh-token"); flashStatus("⚠️ Token sem permissão. Publique de novo com um token com acesso de escrita."); return; }
+    if (!putRes.ok) {
+      const e = await putRes.json().catch(() => ({}));
+      flashStatus("⚠️ Falha ao publicar: " + (e.message || putRes.status));
+      return;
+    }
+    flashStatus("✅ Publicado! O site do usuário atualiza em ~1 minuto.");
+  } catch (err) {
+    console.error(err);
+    flashStatus("⚠️ Erro de rede ao publicar. Veja o console (F12).");
+  }
 }
 
 // ============================================================
@@ -923,6 +1001,10 @@ if (fileImage) {
 
 on("btn-fit", "click", fitToView);
 on("btn-export", "click", exportJSON);
+on("btn-publish-live", "click", publishLive);
+on("btn-publish-live-2", "click", publishLive);
+on("btn-export-2", "click", exportJSON);
+prefillRepoConfig();
 
 // painel de lojas (editor)
 const storeListEl = document.getElementById("store-list");

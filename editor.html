@@ -38,7 +38,8 @@
       </div>
 
       <div class="tool-group">
-        <button id="btn-export" class="primary" title="Baixar o mapa (JSON) para publicar">⬇️ Publicar (JSON)</button>
+        <button id="btn-publish-live" class="primary" title="Publicar o mapa direto no site (1 clique)">🚀 Publicar ao vivo</button>
+        <button id="btn-export" title="Baixar o mapa (JSON) como backup">⬇️ Baixar JSON</button>
         <button id="btn-import" title="Abrir um mapa (JSON)">⬆️ Importar</button>
         <a class="linkbtn" href="index.html" title="Abrir a página do usuário">👁️ Ver como usuário</a>
       </div>
@@ -96,13 +97,26 @@
 
       <!-- PUBLICAÇÃO -->
       <section class="panel">
-        <h2>💾 Publicar</h2>
-        <p class="muted small" style="margin-top:0">
-          O mapa mora no arquivo <strong>data/mapa.json</strong>. Ao terminar,
-          clique em <strong>⬇️ Publicar</strong>, e substitua o arquivo
-          <code>data/mapa.json</code> do app pelo baixado. Os usuários passam
-          a ver o novo mapa na página <strong>index.html</strong>.
+        <h2>🚀 Publicar</h2>
+        <div class="row">
+          <button id="btn-publish-live-2" class="primary">🚀 Publicar ao vivo</button>
+        </div>
+        <p class="muted small">
+          Envia o mapa direto para o site — o usuário vê em ~1 minuto, sem trocar
+          arquivo nem terminal. Na <strong>primeira vez</strong> pede um
+          <strong>token do GitHub</strong> (com permissão <em>Contents: Read and write</em>
+          neste repositório); ele fica só nesta sessão do navegador.
         </p>
+        <details class="advanced">
+          <summary>Configuração do repositório</summary>
+          <label class="field"><span>Owner (usuário/org)</span><input type="text" id="gh-owner" placeholder="ex.: vitaliano" /></label>
+          <label class="field"><span>Repositório</span><input type="text" id="gh-repo" placeholder="ex.: navegacao-shopping" /></label>
+          <label class="field"><span>Branch</span><input type="text" id="gh-branch" placeholder="main" /></label>
+          <p class="muted small">Preenchido automaticamente no site publicado. Ajuste se estiver rodando localmente.</p>
+        </details>
+        <div class="row" style="margin-top:8px">
+          <button id="btn-export-2">⬇️ Baixar JSON (backup)</button>
+        </div>
       </section>
 
       <!-- LOJAS -->
