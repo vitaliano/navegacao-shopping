@@ -852,48 +852,6 @@ function sameMap(a, b) {
   return norm(a) === norm(b);
 }
 
-// Publica via porteiro (servidor): manda senha + mapa; sem token no navegador
-async function publishViaPorteiro() {
-  const password = sessionStorage.getItem("cfg-pass");
-  const nome = sessionStorage.getItem("cfg-name") || "";
-  if (!password) { flashStatus("⚠️ Sessão expirada. Recarregue a página e entre de novo."); return; }
-
-  // Aviso de conflito: se o mapa publicado mudou desde que você abriu
-  try {
-    const res = await fetch(MAP_URL + "?_=" + new Date().getTime(), { cache: "no-store" });
-    if (res.ok) {
-      const liveText = await res.text();
-      if (state.loadedMapText && !sameMap(liveText, state.loadedMapText)) {
-        if (!confirm(
-          "⚠️ O mapa publicado MUDOU desde que você abriu (outra pessoa publicou).\n\n" +
-          "Se continuar, você vai SOBRESCREVER com a sua versão.\n" +
-          "Recomendado: cancele e clique em '🔄 Recarregar publicado'.\n\nPublicar mesmo assim?"
-        )) { flashStatus("Publicação cancelada."); return; }
-      }
-    }
-  } catch (e) { /* segue mesmo se a checagem falhar */ }
-
-  flashStatus("🚀 Publicando…");
-  try {
-    const res = await fetch(window.PORTEIRO_URL, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "publish", password, map: serialize() }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (res.ok && data.ok) {
-      state.loadedMapText = JSON.stringify(serialize(), null, 2);
-      flashStatus(`✅ PUBLICADO por ${nome || "você"}! O site atualiza em ~1 min.`);
-    } else if (res.status === 401) {
-      flashStatus("❌ NÃO publicado: senha inválida. Recarregue e entre de novo.");
-    } else {
-      flashStatus("❌ NÃO publicado: " + ((data && data.error) || ("erro " + res.status)));
-    }
-  } catch (e) {
-    console.error(e);
-    flashStatus("❌ NÃO publicado: erro de rede ao falar com o servidor.");
-  }
-}
-
 // Recarrega o mapa publicado (para adicionar por cima da versão mais nova)
 async function reloadPublished() {
   if (state.nodes.length &&
@@ -908,18 +866,19 @@ async function reloadPublished() {
 }
 
 async function publishLive() {
-  if (window.PORTEIRO_URL) return publishViaPorteiro();
   const cfg = getRepoConfig();
   if (!cfg.owner || !cfg.repo) {
     flashStatus("⚠️ Configure owner/repositório em 'Configuração do repositório'.");
     return;
   }
-  let token = sessionStorage.getItem("gh-token");
+  // Token fica salvo NESTE dispositivo (localStorage): você cola uma única vez
+  // e não pergunta mais. Use "Esquecer token" para remover.
+  let token = localStorage.getItem("gh-token");
   if (!token) {
-    token = prompt("Cole um token do GitHub com permissão de escrita (Contents) neste repositório.\nEle fica só nesta sessão do navegador:");
+    token = prompt("Cole um token do GitHub com permissão de escrita (Contents) neste repositório.\nFica salvo neste dispositivo — você só faz isso uma vez:");
     if (!token) return;
     token = token.trim();
-    sessionStorage.setItem("gh-token", token);
+    localStorage.setItem("gh-token", token);
   }
 
   const apiBase = `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${cfg.path}`;
@@ -933,7 +892,7 @@ async function publishLive() {
     flashStatus("🚀 Publicando ao vivo…");
     // pega o SHA atual do arquivo (necessário para atualizar)
     const getRes = await fetch(`${apiBase}?ref=${encodeURIComponent(cfg.branch)}`, { headers: ghHeaders(token), cache: "no-store" });
-    if (getRes.status === 401) { sessionStorage.removeItem("gh-token"); flashStatus("⚠️ Token inválido/expirado. Clique em Publicar de novo e cole um token válido."); return; }
+    if (getRes.status === 401) { localStorage.removeItem("gh-token"); flashStatus("❌ Token inválido/expirado. Clique em Publicar de novo e cole um token válido."); return; }
     if (getRes.ok) {
       const j = await getRes.json();
       body.sha = j.sha;
@@ -951,17 +910,17 @@ async function publishLive() {
     }
 
     const putRes = await fetch(apiBase, { method: "PUT", headers: { ...ghHeaders(token), "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    if (putRes.status === 401) { sessionStorage.removeItem("gh-token"); flashStatus("⚠️ Token sem permissão. Publique de novo com um token com acesso de escrita."); return; }
+    if (putRes.status === 401 || putRes.status === 403) { localStorage.removeItem("gh-token"); flashStatus("❌ Token sem permissão. Publique de novo com um token com acesso de escrita."); return; }
     if (!putRes.ok) {
       const e = await putRes.json().catch(() => ({}));
-      flashStatus("⚠️ Falha ao publicar: " + (e.message || putRes.status));
+      flashStatus("❌ Falha ao publicar: " + (e.message || putRes.status));
       return;
     }
     state.loadedMapText = content; // agora esta é a versão publicada
-    flashStatus("✅ Publicado! O site do usuário atualiza em ~1 minuto.");
+    flashStatus("✅ PUBLICADO! O site do usuário atualiza em ~1 minuto.");
   } catch (err) {
     console.error(err);
-    flashStatus("⚠️ Erro de rede ao publicar. Veja o console (F12).");
+    flashStatus("❌ Erro de rede ao publicar. Veja o console (F12).");
   }
 }
 
@@ -1086,6 +1045,10 @@ on("btn-publish-live", "click", publishLive);
 on("btn-publish-live-2", "click", publishLive);
 on("btn-export-2", "click", exportJSON);
 on("btn-reload-published", "click", reloadPublished);
+on("btn-forget-token", "click", () => {
+  localStorage.removeItem("gh-token");
+  flashStatus("🔑 Token removido deste dispositivo. Na próxima publicação, cole de novo.");
+});
 prefillRepoConfig();
 
 // painel de lojas (editor)

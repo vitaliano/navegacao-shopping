@@ -109,11 +109,12 @@
           neste repositório); ele fica só nesta sessão do navegador.
         </p>
         <details class="advanced">
-          <summary>Configuração do repositório</summary>
+          <summary>Configuração do repositório / token</summary>
           <label class="field"><span>Owner (usuário/org)</span><input type="text" id="gh-owner" placeholder="ex.: vitaliano" /></label>
           <label class="field"><span>Repositório</span><input type="text" id="gh-repo" placeholder="ex.: navegacao-shopping" /></label>
           <label class="field"><span>Branch</span><input type="text" id="gh-branch" placeholder="main" /></label>
-          <p class="muted small">Preenchido automaticamente no site publicado. Ajuste se estiver rodando localmente.</p>
+          <div class="row"><button id="btn-forget-token">🔑 Esquecer token deste dispositivo</button></div>
+          <p class="muted small">O token do GitHub fica salvo <strong>neste dispositivo</strong> (você cola uma vez). Owner/repo são preenchidos automaticamente no site publicado.</p>
         </details>
         <div class="row" style="margin-top:8px">
           <button id="btn-export-2">⬇️ Baixar JSON (backup)</button>
@@ -213,13 +214,11 @@
   <input type="file" id="file-image" accept="image/*" hidden />
   <input type="file" id="file-import" accept="application/json,.json" hidden />
 
-  <!-- Login do configurador via "porteiro" (servidor publicador).
-       Enquanto PORTEIRO_URL estiver vazio, cai no modo antigo (senha local
-       mapa2026), para nada quebrar antes de o porteiro ser configurado.
-       Depois de criar o Worker, cole a URL dele em PORTEIRO_URL. -->
+  <!-- Gate de senha do configurador (client-side). Para trocar a senha,
+       altere a constante SENHA abaixo e publique. -->
   <script>
-  window.PORTEIRO_URL = ""; // ← cole aqui a URL do Worker (ex.: https://porteiro-mapa.xxx.workers.dev)
-  (async function () {
+  (function () {
+    const SENHA = "mapa2026";     // ← senha do configurador
     const KEY = "cfg-auth";
     function carregarApp() {
       const arquivos = ["pathfinding.js", "autodetect.js", "qrcode.js", "app.js"];
@@ -232,35 +231,15 @@
         document.body.appendChild(s);
       })(0);
     }
-    function bloquear(msg) {
-      document.body.innerHTML =
-        '<div style="padding:40px;font-family:system-ui;color:#e8edf5;background:#0f1420;min-height:100vh">' +
-        (msg || "🔒 Acesso restrito ao configurador.") + " Recarregue a página para tentar de novo.</div>";
-    }
-    async function verificar(senha) {
-      if (!window.PORTEIRO_URL) {
-        return senha === "mapa2026" ? { ok: true, name: "Configurador" } : { ok: false };
-      }
-      try {
-        const res = await fetch(window.PORTEIRO_URL, {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "verify", password: senha }),
-        });
-        return await res.json();
-      } catch (e) { return { ok: false, error: "rede" }; }
-    }
-
-    if (sessionStorage.getItem(KEY) === "1" && sessionStorage.getItem("cfg-pass")) { carregarApp(); return; }
-    const senha = prompt("🔒 Sua senha do configurador:");
-    if (senha === null) { bloquear(); return; }
-    const r = await verificar(senha);
-    if (r && r.ok) {
+    if (sessionStorage.getItem(KEY) === "1") { carregarApp(); return; }
+    const tentativa = prompt("🔒 Senha do configurador:");
+    if (tentativa !== null && tentativa === SENHA) {
       sessionStorage.setItem(KEY, "1");
-      sessionStorage.setItem("cfg-pass", senha);
-      sessionStorage.setItem("cfg-name", r.name || "");
       carregarApp();
     } else {
-      bloquear(r && r.error === "rede" ? "⚠️ Não consegui falar com o servidor publicador." : "🔒 Senha incorreta.");
+      document.body.innerHTML =
+        '<div style="padding:40px;font-family:system-ui;color:#e8edf5;background:#0f1420;min-height:100vh">' +
+        '🔒 Acesso restrito ao configurador. Recarregue a página para tentar novamente.</div>';
     }
   })();
   </script>
