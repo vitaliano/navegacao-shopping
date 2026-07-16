@@ -841,6 +841,29 @@ function base64OfUtf8(str) {
 function ghHeaders(token) {
   return { Authorization: "Bearer " + token, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" };
 }
+function utf8OfBase64(b64) {
+  const bin = atob((b64 || "").replace(/\n/g, ""));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+function sameMap(a, b) {
+  const norm = (t) => { try { return JSON.stringify(JSON.parse(t)); } catch { return t; } };
+  return norm(a) === norm(b);
+}
+
+// Recarrega o mapa publicado (para adicionar por cima da versão mais nova)
+async function reloadPublished() {
+  if (state.nodes.length &&
+      !confirm("Recarregar o mapa publicado vai DESCARTAR as edições ainda não publicadas desta tela. Continuar?")) return;
+  try {
+    const res = await fetch(MAP_URL + "?_=" + (typeof Date !== "undefined" ? new Date().getTime() : ""), { cache: "no-store" });
+    if (!res.ok) { flashStatus("⚠️ Não consegui recarregar o mapa."); return; }
+    const text = await res.text();
+    state.loadedMapText = text;
+    loadFromData(JSON.parse(text), () => flashStatus("🔄 Mapa publicado recarregado. Pode adicionar por cima."));
+  } catch (e) { console.error(e); flashStatus("⚠️ Erro ao recarregar o mapa."); }
+}
 
 async function publishLive() {
   const cfg = getRepoConfig();
@@ -868,7 +891,21 @@ async function publishLive() {
     // pega o SHA atual do arquivo (necessário para atualizar)
     const getRes = await fetch(`${apiBase}?ref=${encodeURIComponent(cfg.branch)}`, { headers: ghHeaders(token), cache: "no-store" });
     if (getRes.status === 401) { sessionStorage.removeItem("gh-token"); flashStatus("⚠️ Token inválido/expirado. Clique em Publicar de novo e cole um token válido."); return; }
-    if (getRes.ok) body.sha = (await getRes.json()).sha;
+    if (getRes.ok) {
+      const j = await getRes.json();
+      body.sha = j.sha;
+      // Detecta se alguém publicou depois que este editor abriu (evita sobrescrever)
+      const publicado = utf8OfBase64(j.content || "");
+      if (state.loadedMapText && !sameMap(publicado, state.loadedMapText)) {
+        const go = confirm(
+          "⚠️ O mapa publicado MUDOU desde que você abriu o editor (provavelmente outra pessoa publicou).\n\n" +
+          "Se continuar, você vai SOBRESCREVER com a sua versão e as adições da outra pessoa podem se perder.\n\n" +
+          "Recomendado: CANCELE, clique em '🔄 Recarregar publicado' e refaça suas adições sobre a versão nova.\n\n" +
+          "Publicar mesmo assim (sobrescrever)?"
+        );
+        if (!go) { flashStatus("Publicação cancelada. Use '🔄 Recarregar publicado' para pegar a versão nova."); return; }
+      }
+    }
 
     const putRes = await fetch(apiBase, { method: "PUT", headers: { ...ghHeaders(token), "Content-Type": "application/json" }, body: JSON.stringify(body) });
     if (putRes.status === 401) { sessionStorage.removeItem("gh-token"); flashStatus("⚠️ Token sem permissão. Publique de novo com um token com acesso de escrita."); return; }
@@ -877,6 +914,7 @@ async function publishLive() {
       flashStatus("⚠️ Falha ao publicar: " + (e.message || putRes.status));
       return;
     }
+    state.loadedMapText = content; // agora esta é a versão publicada
     flashStatus("✅ Publicado! O site do usuário atualiza em ~1 minuto.");
   } catch (err) {
     console.error(err);
@@ -1004,6 +1042,7 @@ on("btn-export", "click", exportJSON);
 on("btn-publish-live", "click", publishLive);
 on("btn-publish-live-2", "click", publishLive);
 on("btn-export-2", "click", exportJSON);
+on("btn-reload-published", "click", reloadPublished);
 prefillRepoConfig();
 
 // painel de lojas (editor)
@@ -1126,7 +1165,9 @@ async function boot() {
   try {
     const res = await fetch(MAP_URL, { cache: "no-store" });
     if (res.ok) {
-      loadFromData(await res.json(), () => {
+      const text = await res.text();
+      state.loadedMapText = text; // referência p/ detectar conflito de publicação
+      loadFromData(JSON.parse(text), () => {
         // Mapa novo (só a planta, sem pontos): roda a configuração inicial
         // automaticamente e entrega o resultado ao configurador para refinar.
         if (isEditor && state.image && state.nodes.length === 0) {
