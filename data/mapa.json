@@ -2825,9 +2825,17 @@
     {
       "a": 374,
       "b": 358
+    },
+    {
+      "a": 356,
+      "b": 10
+    },
+    {
+      "a": 356,
+      "b": 26
     }
   ],
-  "nextId": 375,
+  "nextId": 377,
   "imageW": 2747,
   "imageH": 2308,
   "imageSrc": "images/mapa-interno.png"
