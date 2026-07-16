@@ -852,6 +852,48 @@ function sameMap(a, b) {
   return norm(a) === norm(b);
 }
 
+// Publica via porteiro (servidor): manda senha + mapa; sem token no navegador
+async function publishViaPorteiro() {
+  const password = sessionStorage.getItem("cfg-pass");
+  const nome = sessionStorage.getItem("cfg-name") || "";
+  if (!password) { flashStatus("⚠️ Sessão expirada. Recarregue a página e entre de novo."); return; }
+
+  // Aviso de conflito: se o mapa publicado mudou desde que você abriu
+  try {
+    const res = await fetch(MAP_URL + "?_=" + new Date().getTime(), { cache: "no-store" });
+    if (res.ok) {
+      const liveText = await res.text();
+      if (state.loadedMapText && !sameMap(liveText, state.loadedMapText)) {
+        if (!confirm(
+          "⚠️ O mapa publicado MUDOU desde que você abriu (outra pessoa publicou).\n\n" +
+          "Se continuar, você vai SOBRESCREVER com a sua versão.\n" +
+          "Recomendado: cancele e clique em '🔄 Recarregar publicado'.\n\nPublicar mesmo assim?"
+        )) { flashStatus("Publicação cancelada."); return; }
+      }
+    }
+  } catch (e) { /* segue mesmo se a checagem falhar */ }
+
+  flashStatus("🚀 Publicando…");
+  try {
+    const res = await fetch(window.PORTEIRO_URL, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "publish", password, map: serialize() }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.ok) {
+      state.loadedMapText = JSON.stringify(serialize(), null, 2);
+      flashStatus(`✅ PUBLICADO por ${nome || "você"}! O site atualiza em ~1 min.`);
+    } else if (res.status === 401) {
+      flashStatus("❌ NÃO publicado: senha inválida. Recarregue e entre de novo.");
+    } else {
+      flashStatus("❌ NÃO publicado: " + ((data && data.error) || ("erro " + res.status)));
+    }
+  } catch (e) {
+    console.error(e);
+    flashStatus("❌ NÃO publicado: erro de rede ao falar com o servidor.");
+  }
+}
+
 // Recarrega o mapa publicado (para adicionar por cima da versão mais nova)
 async function reloadPublished() {
   if (state.nodes.length &&
@@ -866,6 +908,7 @@ async function reloadPublished() {
 }
 
 async function publishLive() {
+  if (window.PORTEIRO_URL) return publishViaPorteiro();
   const cfg = getRepoConfig();
   if (!cfg.owner || !cfg.repo) {
     flashStatus("⚠️ Configure owner/repositório em 'Configuração do repositório'.");
