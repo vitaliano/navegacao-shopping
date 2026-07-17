@@ -28,6 +28,7 @@ const state = {
 
   mode: "select",    // select | addNode | connect | navigate
   selectedId: null,
+  selectedEdge: null, // corredor (aresta) selecionado no editor
   connectFrom: null, // origem pendente ao ligar corredor
   navFrom: null,     // origem pendente no modo navegar
   route: [],         // ids do caminho atual
@@ -65,6 +66,9 @@ const nodeTypeEdit = document.getElementById("node-type-edit");   // só editor
 const routeFromSel = document.getElementById("route-from");
 const routeToSel = document.getElementById("route-to");
 const routeInfo = document.getElementById("route-info");
+
+const edgeNameInput = document.getElementById("edge-name");   // só editor
+const edgeLenEl = document.getElementById("edge-length");     // só editor
 
 // liga um listener só se o elemento existir na página atual
 function on(id, ev, fn) {
@@ -152,11 +156,12 @@ function draw() {
     const pa = worldToScreen(a.x, a.y);
     const pb = worldToScreen(b.x, b.y);
     const onRoute = routeEdges.has(edgeKey(e.a, e.b));
+    const isSel = e === state.selectedEdge;
     ctx.beginPath();
     ctx.moveTo(pa.x, pa.y);
     ctx.lineTo(pb.x, pb.y);
-    ctx.strokeStyle = onRoute ? "#22c55e" : "rgba(148,163,184,.55)";
-    ctx.lineWidth = onRoute ? 5 : 2.5;
+    ctx.strokeStyle = isSel ? "#f59e0b" : onRoute ? "#22c55e" : "rgba(148,163,184,.55)";
+    ctx.lineWidth = isSel ? 6 : onRoute ? 5 : 2.5;
     ctx.stroke();
   }
 
@@ -245,6 +250,46 @@ function nodeAtScreen(sx, sy) {
   return best;
 }
 
+// Corredor (aresta) mais próximo do cursor, dentro de um limiar (px de tela)
+function edgeAtScreen(sx, sy, tol) {
+  const nodeById = new Map(state.nodes.map((n) => [n.id, n]));
+  let best = null, bestD = tol || 8;
+  for (const e of state.edges) {
+    const a = nodeById.get(e.a), b = nodeById.get(e.b);
+    if (!a || !b) continue;
+    const pa = worldToScreen(a.x, a.y), pb = worldToScreen(b.x, b.y);
+    const pr = projectPointToSeg(sx, sy, pa.x, pa.y, pb.x, pb.y);
+    if (pr.d < bestD) { bestD = pr.d; best = e; }
+  }
+  return best;
+}
+
+// Comprimento do corredor em pixels da planta (distância entre as pontas)
+function edgeLength(e) {
+  const a = state.nodes.find((n) => n.id === e.a);
+  const b = state.nodes.find((n) => n.id === e.b);
+  if (!a || !b) return 0;
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function selectEdge(edge) {
+  state.selectedEdge = edge;
+  state.selectedId = null;
+  if (propsPanel) propsPanel.hidden = true;
+  const qp = document.getElementById("props-qr"); if (qp) qp.hidden = true;
+  const ep = document.getElementById("props-edge");
+  if (ep) {
+    if (edge) {
+      ep.hidden = false;
+      if (edgeNameInput) edgeNameInput.value = edge.name || "";
+      if (edgeLenEl) edgeLenEl.textContent = Math.round(edgeLength(edge)) + " px";
+    } else {
+      ep.hidden = true;
+    }
+  }
+  draw();
+}
+
 // ============================================================
 //  Ações do editor
 // ============================================================
@@ -271,6 +316,7 @@ function deleteNodes(ids) {
   if (!set.size) return;
   state.nodes = state.nodes.filter((n) => !set.has(n.id));
   state.edges = state.edges.filter((e) => !set.has(e.a) && !set.has(e.b));
+  if (state.selectedEdge && (set.has(state.selectedEdge.a) || set.has(state.selectedEdge.b))) selectEdge(null);
   if (set.has(state.selectedId)) selectNode(null);
   if (state.route.some((id) => set.has(id))) clearRoute();
   refreshAll();
@@ -286,6 +332,8 @@ function connectNodes(a, b) {
 
 function selectNode(id) {
   state.selectedId = id;
+  state.selectedEdge = null;
+  const ep = document.getElementById("props-edge"); if (ep) ep.hidden = true;
   if (!propsPanel) { draw(); return; } // página de navegação: sem painel de propriedades
   const node = state.nodes.find((n) => n.id === id);
   if (node) {
@@ -612,6 +660,12 @@ canvas.addEventListener("mousedown", (evt) => {
     return;
   }
 
+  // modo Selecionar, clicou fora de um ponto: tenta selecionar um corredor
+  if (state.mode === "select" && isEditor) {
+    const edge = edgeAtScreen(m.x, m.y);
+    if (edge) { selectEdge(edge); return; }
+  }
+
   // fundo: seleciona nada (editor) e arrasta a tela (pan)
   if (isEditor) selectNode(null);
   drag = { type: "pan", startX: m.x, startY: m.y,
@@ -642,7 +696,42 @@ canvas.addEventListener("mousemove", (evt) => {
   } else if (state.mode === "connect" && state.connectFrom != null) {
     draw();
   }
+
+  // dica ao passar o mouse sobre um corredor (nome e, no editor, comprimento)
+  if (!drag) updateEdgeTip(evt, m);
+  else hideEdgeTip();
 });
+
+canvas.addEventListener("mouseleave", hideEdgeTip);
+
+// ---- tooltip de corredor ----
+let edgeTip = null;
+function ensureEdgeTip() {
+  if (edgeTip) return edgeTip;
+  edgeTip = document.createElement("div");
+  edgeTip.style.cssText =
+    "position:fixed;z-index:9999;pointer-events:none;display:none;max-width:260px;" +
+    "background:rgba(15,20,32,.94);color:#e8edf5;border:1px solid #313c52;" +
+    "border-radius:6px;padding:4px 9px;font:12px/1.3 system-ui,sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.4)";
+  document.body.appendChild(edgeTip);
+  return edgeTip;
+}
+function hideEdgeTip() { if (edgeTip) edgeTip.style.display = "none"; }
+function updateEdgeTip(evt, m) {
+  const edge = edgeAtScreen(m.x, m.y, 8);
+  const tip = ensureEdgeTip();
+  // Ao usuário só mostramos corredores COM nome; no editor mostramos sempre.
+  if (edge && (edge.name || isEditor)) {
+    let txt = edge.name || "(corredor sem nome)";
+    if (isEditor) txt += " · " + Math.round(edgeLength(edge)) + " px";
+    tip.textContent = txt;
+    tip.style.left = (evt.clientX + 14) + "px";
+    tip.style.top = (evt.clientY + 14) + "px";
+    tip.style.display = "block";
+  } else {
+    tip.style.display = "none";
+  }
+}
 
 window.addEventListener("mouseup", () => {
   if (drag?.type === "pan") canvas.style.cursor = CURSORS[state.mode] || "default";
@@ -1148,6 +1237,20 @@ on("btn-delete-node", "click", () => {
   if (state.selectedId != null) deleteNode(state.selectedId);
 });
 
+// nome / exclusão de corredor (aresta)
+if (edgeNameInput) {
+  edgeNameInput.addEventListener("input", () => {
+    if (state.selectedEdge) { state.selectedEdge.name = edgeNameInput.value; draw(); }
+  });
+}
+on("btn-delete-edge", "click", () => {
+  if (state.selectedEdge) {
+    state.edges = state.edges.filter((e) => e !== state.selectedEdge);
+    selectEdge(null);
+    refreshAll();
+  }
+});
+
 // rota (as duas páginas)
 on("btn-route", "click", () => computeRoute(routeFromSel.value, routeToSel.value));
 on("btn-clear-route", "click", clearRoute);
@@ -1176,6 +1279,11 @@ if (isEditor) {
       case "delete":
       case "backspace":
         if (state.selectedId != null) deleteNode(state.selectedId);
+        else if (state.selectedEdge) {
+          state.edges = state.edges.filter((ed) => ed !== state.selectedEdge);
+          selectEdge(null);
+          refreshAll();
+        }
         break;
     }
   });

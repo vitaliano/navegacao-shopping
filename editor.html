@@ -168,6 +168,20 @@
         <p class="muted small">Dê um <strong>nome</strong> ao ponto (no painel acima) — ele aparece no cartaz e na tela do usuário.</p>
       </section>
 
+      <!-- CORREDOR SELECIONADO -->
+      <section class="panel" id="props-edge" hidden>
+        <h2>🔗 Corredor selecionado</h2>
+        <label class="field">
+          <span>Nome do corredor</span>
+          <input type="text" id="edge-name" placeholder="Ex.: Calç. das Violetas" />
+        </label>
+        <p class="muted small">Comprimento: <b id="edge-length">—</b></p>
+        <div class="row">
+          <button id="btn-delete-edge" class="danger">🗑️ Excluir corredor</button>
+        </div>
+        <p class="muted small">No modo <strong>✋ Selecionar</strong>, clique em cima de um corredor para nomeá-lo. O nome aparece ao <strong>passar o mouse</strong> sobre o corredor.</p>
+      </section>
+
       <!-- ROTA (teste) -->
       <section class="panel">
         <h2>🧭 Testar rota</h2>
@@ -194,6 +208,7 @@
           <li><strong>🏬 Loja</strong>: clique no local da loja — ela conecta sozinha à via mais próxima. Depois dê o nome (só lojas com nome aparecem pro usuário).</li>
           <li><strong>📱 QR</strong>: clique onde ficará o totem "Você está aqui". Selecione-o para <strong>baixar o QR/cartaz</strong>; ao escanear, a rota já começa desse ponto.</li>
           <li><strong>🔗 Corredor</strong>: clique em dois pontos para ligá-los. Clicando num <strong>lugar vazio</strong>, cria um ponto ali e já liga — assim você desenha corredores novos e estende para áreas não detectadas. <kbd>Esc</kbd> encerra o traçado.</li>
+          <li><strong>Nomear corredor</strong>: no modo <strong>✋ Selecionar</strong>, clique <em>em cima de um corredor</em> → dê o nome e veja o comprimento. O nome aparece ao <strong>passar o mouse</strong> sobre o corredor. Para <strong>praças</strong>: selecione o ponto, mude o tipo para <strong>Praça</strong> e dê o nome.</li>
           <li><strong>✋ Selecionar</strong>: arraste pontos ou o fundo (pan). Roda do mouse dá zoom.</li>
           <li><strong>🧽 Apagar</strong>: clique num ponto para excluir, ou arraste uma <strong>caixa</strong> para apagar vários de uma vez. <strong>Botão direito</strong> exclui um ponto em qualquer modo; <kbd>Del</kbd> exclui o selecionado.</li>
           <li><strong>🧭 Navegar</strong>: clique num ponto de origem e depois no destino.</li>
